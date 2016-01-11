@@ -28,11 +28,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
     @IBOutlet var titleLabel : TitleLabel!
     @IBOutlet var menuHandler : MenuHandler!
     var webView : WKWebView!
+    var websiteDataStore : WKWebsiteDataStore!
 
 
     // MARK: Properties
 
     var timer : NSTimer!
+    var backgroundTimer : NSTimer!
     var activatedFromBackground = false
     var isFullscreen = false
 
@@ -62,7 +64,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         webView.loadRequest(req);
     }
 
+    func applicationDidResignActive(notification: NSNotification) {
+        backgroundTimer = NSTimer.scheduledTimerWithTimeInterval(3600, target: self, selector: "backgroundRefresh", userInfo: nil, repeats: true)
+    }
+
+    func backgroundRefresh() {
+        let dataTypes = Set([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache])
+        websiteDataStore.fetchDataRecordsOfTypes(dataTypes, completionHandler: { records in
+        self.websiteDataStore.removeDataOfTypes(dataTypes, forDataRecords: records, completionHandler: {
+                self.webView.reload()
+            })
+        })
+    }
+
     func applicationDidBecomeActive(aNotification: NSNotification) {
+        backgroundTimer?.invalidate()
+        backgroundTimer = nil
+
         NSApplication.sharedApplication().dockTile.badgeLabel = ""
         if (self.activatedFromBackground) {
             if (self.reactivationMenuItem.state == 1) {
@@ -73,6 +91,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
             self.activatedFromBackground = true;
         }
         reopenWindow(self)
+
+        NSUserNotificationCenter.defaultUserNotificationCenter().removeAllDeliveredNotifications()
     }
 
     func applicationShouldOpenUntitledFile(sender: NSApplication) -> Bool {
@@ -142,6 +162,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
     func createWebview(contentController: WKUserContentController) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
+        configuration.websiteDataStore = WKWebsiteDataStore.defaultDataStore()
+        websiteDataStore = configuration.websiteDataStore
 
         let wv = WKWebView(frame: self.view.bounds, configuration: configuration)
         wv.configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
