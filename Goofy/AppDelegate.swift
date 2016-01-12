@@ -35,6 +35,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
 
     var timer : NSTimer!
     var backgroundTimer : NSTimer!
+    var backgroundTimer2 : NSTimer!
+    var lastBackgroundRefreshTime : CFTimeInterval!
     var activatedFromBackground = false
     var isFullscreen = false
 
@@ -61,11 +63,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
 		// Load URL
         let url : String = "https://messenger.com/login"
         let req = NSMutableURLRequest(URL: NSURL(string: url)!)
-        webView.loadRequest(req);
+        webView.loadRequest(req)
+
+        lastBackgroundRefreshTime = CFAbsoluteTimeGetCurrent()
     }
 
     func applicationDidResignActive(notification: NSNotification) {
         backgroundTimer = NSTimer.scheduledTimerWithTimeInterval(3600, target: self, selector: "backgroundRefresh", userInfo: nil, repeats: true)
+
+        // schedule to refresh after 15 seconds if there hasn't been a refresh for an hour.
+        if CFAbsoluteTimeGetCurrent() - lastBackgroundRefreshTime > 3600 {
+            backgroundTimer2 = NSTimer.scheduledTimerWithTimeInterval(15, target: self, selector: "backgroundRefresh", userInfo: nil, repeats: false)
+        }
     }
 
     func backgroundRefresh() {
@@ -73,6 +82,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         websiteDataStore.fetchDataRecordsOfTypes(dataTypes, completionHandler: { records in
         self.websiteDataStore.removeDataOfTypes(dataTypes, forDataRecords: records, completionHandler: {
                 self.webView.reload()
+                self.lastBackgroundRefreshTime = CFAbsoluteTimeGetCurrent()
             })
         })
     }
@@ -81,12 +91,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         backgroundTimer?.invalidate()
         backgroundTimer = nil
 
+        backgroundTimer2?.invalidate()
+        backgroundTimer2 = nil
+
         NSApplication.sharedApplication().dockTile.badgeLabel = ""
         if (self.activatedFromBackground) {
             if (self.reactivationMenuItem.state == 1) {
                 webView.evaluateJavaScript("reactivation()", completionHandler: nil)
             }
-
         } else {
             self.activatedFromBackground = true;
         }
